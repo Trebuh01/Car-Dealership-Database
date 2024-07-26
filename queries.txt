@@ -1,0 +1,352 @@
+/*Mustang, Camry*/
+/*Klient chce się dowiedzieć jakie ma możliwości co do dodatkowego wyposażenia dla
+zamawianego modelu. Pokaż posortowane kategoriami wyposażenia dostępne dla danego
+modelu*/
+SELECT 
+    D.CENA,
+    CASE
+        WHEN SA.NAZWA IS NOT NULL THEN 'SYSTEM AUDIO: ' + SA.NAZWA
+        WHEN SI.NAZWA IS NOT NULL THEN 'SILNIK: ' + SI.NAZWA
+        WHEN F.NAZWA IS NOT NULL THEN 'FOTEL: ' + F.NAZWA
+        WHEN K.NAZWA IS NOT NULL THEN 'KOLOR: ' + K.NAZWA
+        WHEN FE.NAZWA IS NOT NULL THEN 'FELGI: ' + FE.NAZWA
+    END AS KATEGORIA
+FROM 
+    DOPLATA D
+JOIN 
+    WERSJA WE ON D.ID_WERSJI = WE.ID_WERSJI
+JOIN 
+    MODEL M ON WE.ID_MODELU = M.ID_MODELU AND M.NAZWA_MODELU = 'Camry'
+JOIN 
+    WARIANT_WYPOSAZENIA W ON D.ID_WARIANTU = W.ID_WARIANTU
+LEFT JOIN 
+    SYSTEMY_AUDIO SA ON W.ID_WARIANTU = SA.ID_WARIANTU
+LEFT JOIN 
+    SILNIKI SI ON W.ID_WARIANTU = SI.ID_WARIANTU
+LEFT JOIN 
+    FOTELE F ON W.ID_WARIANTU = F.ID_WARIANTU
+LEFT JOIN 
+    KOLORY K ON W.ID_WARIANTU = K.ID_WARIANTU
+LEFT JOIN 
+    FELGI FE ON W.ID_WARIANTU = FE.ID_WARIANTU
+ORDER BY 
+    KATEGORIA;
+
+/*--------------------------------------------------------------------------------------------------------------*/
+/*Pokaż łączne ceny sprzedawanych w danym miesiacu i roku samochodów (wersje bazowe +
+dopłata) w kolejności chronologicznej sprzedania ich.
+*/
+DECLARE @WybranyMiesiac INT = 1; -- Tutaj podaj konkretny miesiąc
+DECLARE @WybranyRok INT = 2022; -- Tutaj podaj konkretny rok
+
+SELECT DISTINCT
+    SQ.ID_ZAMOWIENIA,
+    SQ.DATA_ZAMOWIENIA,
+    SQ.IMIE_KLIENTA,
+    SQ.NAZWISKO_KLIENTA,
+    SQ.CENA_BAZOWA,
+    ISNULL(SumCenaDoplat, 0) AS SumaCenaDoplat,
+    SQ.CENA_BAZOWA + ISNULL(SumCenaDoplat, 0) AS CenaBazowaPlusDoplata
+FROM (
+    SELECT 
+        Z.ID_ZAMOWIENIA,
+        Z.DATA_ZAMOWIENIA,
+        K.IMIE AS IMIE_KLIENTA,
+        K.NAZWISKO AS NAZWISKO_KLIENTA,
+        W.CENA_BAZOWA
+    FROM 
+        SKONFIGUROWANE_SAMOCHODY S
+    JOIN 
+        ZAMOWIENIA Z ON S.ID_ZAMOWIENIA = Z.ID_ZAMOWIENIA
+    JOIN 
+        KLIENCI K ON Z.ID_KLIENTA = K.ID_KLIENTA
+    JOIN 
+        PRACOWNICY P ON Z.ID_PRACOWNIKA = P.ID_PRACOWNIKA
+    JOIN 
+        OFERTA O ON S.ID_OFERTY = O.ID_OFERTY
+    JOIN 
+        WERSJA W ON O.ID_WERSJI = W.ID_WERSJI
+    JOIN
+        DOPLATA_SKONFIGUROWANE_SAMOCHODY DP ON S.ID_KONFIGURACJI = DP.ID_KONFIGURACJI
+    JOIN
+        DOPLATA DO ON DP.ID_DOPLATY = DO.ID_DOPLATY
+    WHERE 
+        MONTH(Z.DATA_ZAMOWIENIA) = @WybranyMiesiac
+        AND YEAR(Z.DATA_ZAMOWIENIA) = @WybranyRok
+) AS SQ
+LEFT JOIN (
+    SELECT 
+        Z.ID_ZAMOWIENIA,
+        SUM(DO.CENA) AS SumCenaDoplat
+    FROM 
+        SKONFIGUROWANE_SAMOCHODY S
+    JOIN 
+        ZAMOWIENIA Z ON S.ID_ZAMOWIENIA = Z.ID_ZAMOWIENIA
+    JOIN
+        DOPLATA_SKONFIGUROWANE_SAMOCHODY DP ON S.ID_KONFIGURACJI = DP.ID_KONFIGURACJI
+    JOIN
+        DOPLATA DO ON DP.ID_DOPLATY = DO.ID_DOPLATY
+    WHERE 
+        MONTH(Z.DATA_ZAMOWIENIA) = @WybranyMiesiac
+        AND YEAR(Z.DATA_ZAMOWIENIA) = @WybranyRok
+    GROUP BY 
+        Z.ID_ZAMOWIENIA
+) AS SumCenaDoplat ON SQ.ID_ZAMOWIENIA = SumCenaDoplat.ID_ZAMOWIENIA
+ORDER BY SQ.DATA_ZAMOWIENIA;
+
+/*----------------------------------------------------------------------------------------------------------------------*/
+/*Pokaż wyposażenie, których aktualna dostępność jest mała, w kolejności rosnącej, aby
+można było zamówić ich więcej.*/
+-- FELGI
+SELECT NAZWA, DOSTEPNOSC
+FROM FELGI
+WHERE DOSTEPNOSC < 200
+ORDER BY DOSTEPNOSC ASC;
+
+-- SILNIKI
+SELECT NAZWA, DOSTEPNOSC
+FROM SILNIKI
+WHERE DOSTEPNOSC < 200
+ORDER BY DOSTEPNOSC ASC;
+
+-- FOTELE
+SELECT NAZWA, DOSTEPNOSC
+FROM FOTELE
+WHERE DOSTEPNOSC < 200
+ORDER BY DOSTEPNOSC ASC;
+
+-- SYSTEMY AUDIO
+SELECT NAZWA, DOSTEPNOSC
+FROM SYSTEMY_AUDIO
+WHERE DOSTEPNOSC < 200
+ORDER BY DOSTEPNOSC ASC;
+
+-- KOLORY
+SELECT NAZWA, DOSTEPNOSC
+FROM KOLORY
+WHERE DOSTEPNOSC < 200
+ORDER BY DOSTEPNOSC ASC;
+
+/*----------------------------------------------------------------------------------------------------------------------*/
+/*Podaj imię i nazwisko klienta, który zakupił samochód o najwiekszej ilości cylindrów
+silnika, ktorego dostepnosc jest mala*/
+SELECT TOP 1
+    K.IMIE AS IMIE_KLIENTA,
+    K.NAZWISKO AS NAZWISKO_KLIENTA,
+    Z.ID_ZAMOWIENIA,
+    SI.NAZWA
+FROM 
+    ZAMOWIENIA Z
+JOIN 
+    KLIENCI K ON Z.ID_KLIENTA = K.ID_KLIENTA
+JOIN
+    SKONFIGUROWANE_SAMOCHODY S ON S.ID_ZAMOWIENIA = Z.ID_ZAMOWIENIA
+JOIN
+    DOPLATA_SKONFIGUROWANE_SAMOCHODY DP ON S.ID_KONFIGURACJI = DP.ID_KONFIGURACJI
+JOIN
+    DOPLATA DO ON DP.ID_DOPLATY = DO.ID_DOPLATY
+JOIN
+    WARIANT_WYPOSAZENIA WW ON DO.ID_WARIANTU = WW.ID_WARIANTU
+LEFT JOIN 
+    SILNIKI SI ON WW.ID_WARIANTU = SI.ID_WARIANTU
+LEFT JOIN 
+    FELGI FE ON WW.ID_WARIANTU = FE.ID_WARIANTU
+WHERE 
+    SI.ILOSC_CYLINDROW = (SELECT MAX(ILOSC_CYLINDROW) FROM SILNIKI)
+    AND SI.DOSTEPNOSC < 200
+ORDER BY FE.ROZMIAR DESC;
+
+/*----------------------------------------------------------------------------------------------------------------------*/
+/*Sporządź raport marek samochodów (na podstawie sprzedaży) oraz podaj ich najpopularniejszy model z danego roku, posortuj sprzedaze malejaco*/
+
+WITH RankedModels AS (
+    SELECT
+        MA.NAZWA_MARKI AS NAZWA_MARKI,
+        M.NAZWA_MODELU AS MODEL_NAJCZESCIEJ_SPRZEDAWANY,
+        COUNT(*) AS LICZBA_SPRZEDAZY,
+        RANK() OVER (PARTITION BY MA.NAZWA_MARKI ORDER BY COUNT(*) DESC) AS ModelRank
+    FROM
+        ZAMOWIENIA Z
+    JOIN
+        SKONFIGUROWANE_SAMOCHODY S ON S.ID_ZAMOWIENIA = Z.ID_ZAMOWIENIA
+    JOIN 
+        OFERTA O ON S.ID_OFERTY = O.ID_OFERTY
+    JOIN 
+        WERSJA W ON O.ID_WERSJI = W.ID_WERSJI
+    JOIN
+        MODEL M ON W.ID_MODELU = M.ID_MODELU
+    JOIN
+        MARKA MA ON M.ID_MARKI = MA.ID_MARKI
+    WHERE
+        YEAR(Z.DATA_ZAMOWIENIA) = 2022
+    GROUP BY
+        MA.NAZWA_MARKI, M.NAZWA_MODELU
+)
+SELECT
+    NAZWA_MARKI,
+    LICZBA_SPRZEDAZY,
+    MODEL_NAJCZESCIEJ_SPRZEDAWANY
+FROM
+    RankedModels
+WHERE
+    ModelRank = 1
+ORDER BY
+    LICZBA_SPRZEDAZY DESC;
+
+/*----------------------------------------------------------------------------------------------------------------------*/
+/*Który wariant wyposażenia jest najczęściej wybierany? Podaj 3 z nich w kolejności rosnącej.*/
+
+SELECT TOP 3
+    COUNT(D.ID_WARIANTU) AS LICZBA_ZAMOWIEN_WARIANTU,
+    CASE
+        WHEN SA.NAZWA IS NOT NULL THEN 'SYSTEM AUDIO: ' + SA.NAZWA
+        WHEN SI.NAZWA IS NOT NULL THEN 'SILNIK: ' + SI.NAZWA
+        WHEN F.NAZWA IS NOT NULL THEN 'FOTEL: ' + F.NAZWA
+        WHEN K.NAZWA IS NOT NULL THEN 'KOLOR: ' + K.NAZWA
+        WHEN FE.NAZWA IS NOT NULL THEN 'FELGI: ' + FE.NAZWA
+    END AS KATEGORIA
+FROM
+    DOPLATA D
+JOIN 
+    WARIANT_WYPOSAZENIA W ON D.ID_WARIANTU = W.ID_WARIANTU
+LEFT JOIN 
+    SYSTEMY_AUDIO SA ON W.ID_WARIANTU = SA.ID_WARIANTU
+LEFT JOIN 
+    SILNIKI SI ON W.ID_WARIANTU = SI.ID_WARIANTU
+LEFT JOIN 
+    FOTELE F ON W.ID_WARIANTU = F.ID_WARIANTU
+LEFT JOIN 
+    KOLORY K ON W.ID_WARIANTU = K.ID_WARIANTU
+LEFT JOIN 
+    FELGI FE ON W.ID_WARIANTU = FE.ID_WARIANTU
+GROUP BY
+    D.ID_WARIANTU,
+    CASE
+        WHEN SA.NAZWA IS NOT NULL THEN 'SYSTEM AUDIO: ' + SA.NAZWA
+        WHEN SI.NAZWA IS NOT NULL THEN 'SILNIK: ' + SI.NAZWA
+        WHEN F.NAZWA IS NOT NULL THEN 'FOTEL: ' + F.NAZWA
+        WHEN K.NAZWA IS NOT NULL THEN 'KOLOR: ' + K.NAZWA
+        WHEN FE.NAZWA IS NOT NULL THEN 'FELGI: ' + FE.NAZWA
+    END
+ORDER BY
+    LICZBA_ZAMOWIEN_WARIANTU DESC;
+
+/*----------------------------------------------------------------------------------------------------------------------*/
+/*Podaj imie i nazwisko pracownika ktory obslozyl najwiecej zamowien w danym roku i miesiacu konkretnej marki samochodow, aby przyznac mu premie*/
+GO
+CREATE VIEW NAJWIECEJ_ZAMOWIEN_VIEW AS
+SELECT
+    P.ID_PRACOWNIKA,
+    P.IMIE,
+    P.NAZWISKO,
+	MA.NAZWA_MARKI,
+    COUNT(Z.ID_ZAMOWIENIA) AS LICZBA_ZAMOWIEN
+FROM
+    ZAMOWIENIA Z
+JOIN
+    PRACOWNICY P ON Z.ID_PRACOWNIKA = P.ID_PRACOWNIKA
+JOIN
+     SKONFIGUROWANE_SAMOCHODY S ON S.ID_ZAMOWIENIA = Z.ID_ZAMOWIENIA
+JOIN 
+        OFERTA O ON S.ID_OFERTY = O.ID_OFERTY
+    JOIN 
+        WERSJA W ON O.ID_WERSJI = W.ID_WERSJI
+JOIN
+	MODEL M ON W.ID_MODELU=M.ID_MODELU
+JOIN
+	MARKA MA ON M.ID_MARKI=MA.ID_MARKI
+WHERE
+    MONTH(Z.DATA_ZAMOWIENIA) = 1 AND YEAR(Z.DATA_ZAMOWIENIA) = 2022
+	AND MA.NAZWA_MARKI = 'Ford'
+GROUP BY
+    P.ID_PRACOWNIKA, P.IMIE, P.NAZWISKO,MA.NAZWA_MARKI;
+GO
+
+SELECT 
+    IMIE,
+    NAZWISKO,
+	LICZBA_ZAMOWIEN,
+	NAZWA_MARKI
+FROM
+    NAJWIECEJ_ZAMOWIEN_VIEW
+ORDER BY
+    LICZBA_ZAMOWIEN DESC;
+DROP VIEW NAJWIECEJ_ZAMOWIEN_VIEW;
+
+/*----------------------------------------------------------------------------------------------------------------------*/
+/*Podaj imie i nazwiosko pracownika i klienta ktorzy byli przy zamowieniu ktore mialo najwyzsza kwote finansowania w czasie dzialania calej firmy, podaj tez date zawarcia umowy finansowania*/
+
+WITH ZamowienieFinansowanie AS (
+    SELECT
+        Z.ID_ZAMOWIENIA,
+        Z.ID_KLIENTA,
+        Z.ID_PRACOWNIKA,
+        Z.ID_FINANSOWANIA,
+        U.KWOTA_FINANSOWANIA
+    FROM
+        ZAMOWIENIA Z
+    JOIN
+        UMOWY_FINANSOWANIA U ON Z.ID_FINANSOWANIA = U.ID_FINANSOWANIA
+)
+
+SELECT TOP 1
+    P.IMIE AS Pracownik_Imie,
+    P.NAZWISKO AS Pracownik_Nazwisko,
+    K.IMIE AS Klient_Imie,
+    K.NAZWISKO AS Klient_Nazwisko,
+    ZF.KWOTA_FINANSOWANIA,
+    U.DATA_ZAWARCIA
+FROM
+    ZamowienieFinansowanie ZF
+JOIN
+    PRACOWNICY P ON ZF.ID_PRACOWNIKA = P.ID_PRACOWNIKA
+JOIN
+    KLIENCI K ON ZF.ID_KLIENTA = K.ID_KLIENTA
+JOIN
+    UMOWY_FINANSOWANIA U ON ZF.ID_FINANSOWANIA = U.ID_FINANSOWANIA
+ORDER BY
+    ZF.KWOTA_FINANSOWANIA DESC;
+
+/*----------------------------------------------------------------------------------------------------------------------*/
+/*Podaj ID_WERSJI samochodu dla ktorej zostal przydzielony najmniejszy rabat ze wszystkich, podaj date obowiazywania tej ofery i model kotorego dotyczyla
+oraz jaka kwota finansowania towarzyszyla podczas zamawiania tej wersji samochodu*/
+WITH NajmniejszyRabat AS (
+    SELECT
+        O.ID_WERSJI,
+        O.DATA_WPROWADZENIA,
+        O.DATA_ZAKONCZENIA,
+        O.RABAT,
+        M.NAZWA_MODELU,
+		U.KWOTA_FINANSOWANIA
+    FROM
+        ZAMOWIENIA Z
+	JOIN
+        UMOWY_FINANSOWANIA U ON Z.ID_FINANSOWANIA = U.ID_FINANSOWANIA
+JOIN
+     SKONFIGUROWANE_SAMOCHODY S ON S.ID_ZAMOWIENIA = Z.ID_ZAMOWIENIA
+JOIN 
+        OFERTA O ON S.ID_OFERTY = O.ID_OFERTY
+    JOIN 
+        WERSJA W ON O.ID_WERSJI = W.ID_WERSJI
+JOIN
+	MODEL M ON W.ID_MODELU=M.ID_MODELU
+    WHERE
+        O.RABAT IS NOT NULL
+)
+
+SELECT TOP 1
+    NR.ID_WERSJI,
+    NR.DATA_WPROWADZENIA,
+    NR.DATA_ZAKONCZENIA,
+    NR.RABAT,
+    NR.NAZWA_MODELU,
+	NR.KWOTA_FINANSOWANIA
+FROM
+    NajmniejszyRabat NR
+ORDER BY
+    NR.RABAT ASC;
+
+
+
+
+
